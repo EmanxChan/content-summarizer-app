@@ -1,0 +1,25 @@
+{
+  "name": "Content Summarizer",
+  "short_name": "Summarizer",
+  "description": "AI-powered summaries for YouTube, podcasts, articles, and more",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#F0F0EB",
+  "theme_color": "#008080",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"]
+}

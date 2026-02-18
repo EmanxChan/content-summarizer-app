@@ -1,0 +1,104 @@
+import { NextRequest, NextResponse } from 'next/server'
+import OpenAI from 'openai'
+
+const groq = new OpenAI({
+  apiKey: process.env.GROQ_API_KEY!,
+  baseURL: 'https://api.groq.com/openai/v1',
+})
+
+const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+
+async function getYouTubeTranscript(url: string): Promise<{ title: string; transcript: string }> {
+  // Extract video ID
+  const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  if (!match) throw new Error('Invalid YouTube URL')
+  const videoId = match[1]
+
+  // Fetch transcript via YouTube Transcript API (unofficial)
+  const transcriptRes = await fetch(
+    `https://www.youtube.com/watch?v=${videoId}`,
+    { headers: { 'User-Agent': 'Mozilla/5.0' } }
+  )
+  const html = await transcriptRes.text()
+
+  // Extract title
+  const titleMatch = html.match(/<title>(.+?)<\/title>/)
+  const title = titleMatch ? titleMatch[1].replace(' - YouTube', '') : 'YouTube Video'
+
+  // Use Groq to summarize the video directly via description if transcript unavailable
+  // For now return placeholder — Phase 2 will wire in full transcript extraction
+  return { title, transcript: `[Transcript for video ${videoId} — Phase 2 will extract full transcript]` }
+}
+
+async function summarizeText(
+  text: string,
+  title: string,
+  wordCount: number
+): Promise<{ summary: string; insights: string[] }> {
+  const completion = await groq.chat.completions.create({
+    model: MODEL,
+    messages: [
+      {
+        role: 'system',
+        content: `You are an expert summarizer. Always respond with valid JSON matching this exact structure:
+{"summary": "...", "insights": ["...", "...", "...", "...", "..."]}
+The summary should be ${wordCount} words. Insights should be 5 concise bullet points.`,
+      },
+      {
+        role: 'user',
+        content: `Summarize this content titled "${title}":\n\n${text.slice(0, 12000)}`,
+      },
+    ],
+    response_format: { type: 'json_object' },
+    max_tokens: 1500,
+    temperature: 0.4,
+  })
+
+  const raw = completion.choices[0].message.content || '{}'
+  const parsed = JSON.parse(raw)
+  return {
+    summary: parsed.summary || '',
+    insights: parsed.insights || [],
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    const contentType = req.headers.get('content-type') || ''
+    let url = '', text = '', words = 300
+
+    if (contentType.includes('multipart/form-data')) {
+      // File upload — Phase 5
+      return NextResponse.json({ error: 'File upload coming in Phase 5' }, { status: 501 })
+    } else {
+      const body = await req.json()
+      url = body.url || ''
+      text = body.text || ''
+      words = body.words || 300
+    }
+
+    let title = 'Content'
+    let transcript = text
+
+    if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
+      const yt = await getYouTubeTranscript(url)
+      title = yt.title
+      transcript = yt.transcript
+    } else if (url) {
+      return NextResponse.json({ error: 'Use the Article tab for non-YouTube URLs' }, { status: 400 })
+    }
+
+    if (!transcript || transcript.trim().length < 20) {
+      return NextResponse.json({ error: 'No content to summarize' }, { status: 400 })
+    }
+
+    const result = await summarizeText(transcript, title, words)
+    return NextResponse.json({ title, ...result })
+  } catch (err: unknown) {
+    console.error('Summarize error:', err)
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Failed to summarize' },
+      { status: 500 }
+    )
+  }
+}
