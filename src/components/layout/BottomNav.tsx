@@ -1,12 +1,12 @@
 'use client'
 
-import { Youtube, FileText, Upload, MessageCircle, Clock } from 'lucide-react'
+import { Youtube, Mic, FileText, MessageCircle, Clock } from 'lucide-react'
 import { clsx } from 'clsx'
 
 const NAV_ITEMS = [
   { id: 'youtube',  label: 'YouTube',  Icon: Youtube },
+  { id: 'podcast',  label: 'Podcast',  Icon: Mic },
   { id: 'article',  label: 'Article',  Icon: FileText },
-  { id: 'upload',   label: 'Upload',   Icon: Upload },
   { id: 'chat',     label: 'Chat',     Icon: MessageCircle },
   { id: 'history',  label: 'History',  Icon: Clock },
 ]

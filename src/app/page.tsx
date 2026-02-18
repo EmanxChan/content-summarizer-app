@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Youtube, FileText, Upload, MessageCircle, Clock, Type } from 'lucide-react'
+import { Youtube, FileText, Upload, MessageCircle, Clock, Type, Mic } from 'lucide-react'
 import { clsx } from 'clsx'
 import Header from '@/components/layout/Header'
 import BottomNav from '@/components/layout/BottomNav'
@@ -11,9 +11,11 @@ import TextTab from '@/components/tabs/TextTab'
 import UploadTab from '@/components/tabs/UploadTab'
 import ChatTab from '@/components/tabs/ChatTab'
 import HistoryTab from '@/components/tabs/HistoryTab'
+import PodcastTab from '@/components/tabs/PodcastTab'
 
 const TABS = [
   { id: 'youtube',  label: 'YouTube',  Icon: Youtube },
+  { id: 'podcast',  label: 'Podcast',  Icon: Mic },
   { id: 'article',  label: 'Article',  Icon: FileText },
   { id: 'text',     label: 'Text',     Icon: Type },
   { id: 'upload',   label: 'Upload',   Icon: Upload },
@@ -24,6 +26,7 @@ const TABS = [
 function TabContent({ tab }: { tab: string }) {
   switch (tab) {
     case 'youtube':  return <YoutubeTab />
+    case 'podcast':  return <PodcastTab />
     case 'article':  return <ArticleTab />
     case 'text':     return <TextTab />
     case 'upload':   return <UploadTab />
