@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { MessageCircle, Send, Globe, ChevronDown, ChevronUp } from 'lucide-react'
 import { clsx } from 'clsx'
+import MarkdownContent from '@/components/ui/MarkdownContent'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -109,13 +110,17 @@ export default function ChatSection({ title, summary, insights }: Props) {
                 >
                   <div
                     className={clsx(
-                      'max-w-[85%] rounded px-3 py-2 text-xs',
+                      'max-w-[85%] rounded px-3 py-2',
                       msg.role === 'user'
-                        ? 'bg-[var(--accent)] text-white'
+                        ? 'bg-[var(--accent)] text-white text-xs'
                         : 'bg-[var(--bg)] border border-[var(--border)] text-[var(--text)]'
                     )}
                   >
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                    {msg.role === 'user' ? (
+                      <p className="whitespace-pre-wrap text-xs">{msg.content}</p>
+                    ) : (
+                      <MarkdownContent content={msg.content} size="xs" />
+                    )}
                     {msg.sources && msg.sources.length > 0 && (
                       <details className="mt-1.5">
                         <summary className="cursor-pointer opacity-70 hover:opacity-100">

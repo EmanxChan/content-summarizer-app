@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { Send, Globe, Trash2 } from 'lucide-react'
 import { clsx } from 'clsx'
+import MarkdownContent from '@/components/ui/MarkdownContent'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -115,13 +116,17 @@ export default function ChatTab() {
           >
             <div
               className={clsx(
-                'max-w-[85%] rounded px-3 py-2 text-sm',
+                'max-w-[85%] rounded px-3 py-2',
                 msg.role === 'user'
-                  ? 'bg-[var(--accent)] text-white'
+                  ? 'bg-[var(--accent)] text-white text-sm'
                   : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text)]'
               )}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              {msg.role === 'user' ? (
+                <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+              ) : (
+                <MarkdownContent content={msg.content} size="sm" />
+              )}
               {msg.sources && msg.sources.length > 0 && (
                 <details className="mt-2">
                   <summary className="cursor-pointer text-xs opacity-70 hover:opacity-100">
