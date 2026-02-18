@@ -12,6 +12,29 @@ function getGroq() {
 
 const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
+function isXUrl(url: string) {
+  return url.includes('x.com/') || url.includes('twitter.com/')
+}
+
+async function extractWithJina(url: string): Promise<{ title: string; content: string }> {
+  const res = await fetch(`https://r.jina.ai/${url}`, {
+    headers: {
+      Accept: 'text/plain',
+      'X-Return-Format': 'markdown',
+    },
+  })
+  if (!res.ok) throw new Error(`Jina extract failed: ${res.status}`)
+  const text = await res.text()
+
+  // Jina returns: "Title: ...\nURL Source: ...\nMarkdown Content:\n..."
+  const titleMatch = text.match(/^Title:\s*(.+)/m)
+  const title = titleMatch?.[1]?.trim() || new URL(url).hostname
+  const contentStart = text.indexOf('Markdown Content:')
+  const content = contentStart !== -1 ? text.slice(contentStart + 17).trim() : text
+
+  return { title, content }
+}
+
 async function extractWithTavily(url: string): Promise<{ title: string; content: string }> {
   const res = await fetch('https://api.tavily.com/extract', {
     method: 'POST',
@@ -39,8 +62,10 @@ export async function POST(req: NextRequest) {
     const { url, words = 300 } = await req.json()
     if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })
 
-    // Extract content via Tavily (replaces Jina)
-    const { title, content } = await extractWithTavily(url)
+    // X/Twitter needs Jina (has auth bypass); everything else uses Tavily
+    const { title, content } = isXUrl(url)
+      ? await extractWithJina(url)
+      : await extractWithTavily(url)
 
     if (!content || content.length < 100) {
       return NextResponse.json({ error: 'Could not extract article content' }, { status: 422 })
