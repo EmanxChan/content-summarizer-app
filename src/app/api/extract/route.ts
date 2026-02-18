@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import OpenAI from 'openai'
 
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY!,
-  baseURL: 'https://api.groq.com/openai/v1',
-})
+function getGroq() {
+  return new OpenAI({
+    apiKey: process.env.GROQ_API_KEY!,
+    baseURL: 'https://api.groq.com/openai/v1',
+  })
+}
 
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 async function extractWithTavily(url: string): Promise<{ title: string; content: string }> {
   const res = await fetch('https://api.tavily.com/extract', {
@@ -43,8 +47,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Summarize with Groq
-    const completion = await groq.chat.completions.create({
-      model: MODEL,
+    const completion = await getGroq().chat.completions.create({
+      model: MODEL(),
       messages: [
         {
           role: 'system',

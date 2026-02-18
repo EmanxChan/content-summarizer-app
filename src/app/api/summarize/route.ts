@@ -1,12 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
+
+export const dynamic = 'force-dynamic'
 import OpenAI from 'openai'
 
-const groq = new OpenAI({
-  apiKey: process.env.GROQ_API_KEY!,
-  baseURL: 'https://api.groq.com/openai/v1',
-})
+function getGroq() {
+  return new OpenAI({
+    apiKey: process.env.GROQ_API_KEY!,
+    baseURL: 'https://api.groq.com/openai/v1',
+  })
+}
 
-const MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 async function getYouTubeTranscript(url: string): Promise<{ title: string; transcript: string }> {
   // Extract video ID
@@ -35,8 +39,8 @@ async function summarizeText(
   title: string,
   wordCount: number
 ): Promise<{ summary: string; insights: string[] }> {
-  const completion = await groq.chat.completions.create({
-    model: MODEL,
+  const completion = await getGroq().chat.completions.create({
+    model: MODEL(),
     messages: [
       {
         role: 'system',
