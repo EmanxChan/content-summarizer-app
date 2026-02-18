@@ -9,7 +9,7 @@ export default function ArticleTab() {
   const [url, setUrl] = useState('')
   const [words, setWords] = useState(300)
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ summary: string; insights: string[]; title: string } | null>(null)
+  const [result, setResult] = useState<{ title: string; summary: string; insights: string[]; highlights: string[]; next_steps: string[] } | null>(null)
   const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {

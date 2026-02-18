@@ -235,8 +235,11 @@ export async function POST(req: NextRequest) {
         {
           role: 'system',
           content: `You are an expert podcast summarizer. Always respond with valid JSON:
-{"summary": "...", "insights": ["...", "...", "...", "...", "..."]}
-Summary should be ${words} words. Insights should be 5 concise bullet points.`,
+{"insights": ["...", "...", "...", "...", "..."], "highlights": ["...", "...", "..."], "summary": "...", "next_steps": ["...", "...", "..."]}
+insights: 5 concise, bold takeaways (one sentence each).
+highlights: 3-5 memorable quotes or key statements from the episode.
+summary: executive summary of ${words} words.
+next_steps: 3 specific, actionable steps the listener should take.`,
         },
         {
           role: 'user',
@@ -261,6 +264,8 @@ Summary should be ${words} words. Insights should be 5 concise bullet points.`,
       contentSource,
       summary: parsed.summary || '',
       insights: parsed.insights || [],
+      highlights: parsed.highlights || [],
+      next_steps: parsed.next_steps || [],
     })
   } catch (err: unknown) {
     console.error('Podcast error:', err)

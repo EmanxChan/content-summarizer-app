@@ -38,15 +38,18 @@ async function summarizeText(
   text: string,
   title: string,
   wordCount: number
-): Promise<{ summary: string; insights: string[] }> {
+): Promise<{ summary: string; insights: string[]; highlights: string[]; next_steps: string[] }> {
   const completion = await getGroq().chat.completions.create({
     model: MODEL(),
     messages: [
       {
         role: 'system',
-        content: `You are an expert summarizer. Always respond with valid JSON matching this exact structure:
-{"summary": "...", "insights": ["...", "...", "...", "...", "..."]}
-The summary should be ${wordCount} words. Insights should be 5 concise bullet points.`,
+        content: `You are an expert summarizer. Always respond with valid JSON:
+{"insights": ["...", "...", "...", "...", "..."], "highlights": ["...", "...", "..."], "summary": "...", "next_steps": ["...", "...", "..."]}
+insights: 5 concise, bold takeaways (one sentence each).
+highlights: 3-5 memorable quotes or key statements directly from the content.
+summary: executive summary of ${wordCount} words.
+next_steps: 3 specific, actionable steps the reader should take.`,
       },
       {
         role: 'user',
@@ -63,6 +66,8 @@ The summary should be ${wordCount} words. Insights should be 5 concise bullet po
   return {
     summary: parsed.summary || '',
     insights: parsed.insights || [],
+    highlights: parsed.highlights || [],
+    next_steps: parsed.next_steps || [],
   }
 }
 

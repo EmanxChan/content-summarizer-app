@@ -17,6 +17,8 @@ interface PodcastResult {
   contentSource: 'transcript' | 'description'
   summary: string
   insights: string[]
+  highlights: string[]
+  next_steps: string[]
 }
 
 function formatDuration(secs: number) {
