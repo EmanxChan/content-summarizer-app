@@ -27,6 +27,8 @@ export default function YoutubeTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to summarize')
       setResult(data)
+      fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'youtube', title: data.title, url: url.trim(), summary: data.summary, insights: data.insights, highlights: data.highlights, next_steps: data.next_steps }) })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {

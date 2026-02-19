@@ -26,6 +26,8 @@ export default function TextTab() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed')
       setResult(data)
+      fetch('/api/history', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'text', title: data.title, summary: data.summary, insights: data.insights, highlights: data.highlights, next_steps: data.next_steps }) })
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
     } finally {
