@@ -13,25 +13,27 @@ function getGroq() {
 const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
 async function getYouTubeTranscript(url: string): Promise<{ title: string; transcript: string }> {
-  // Extract video ID
-  const match = url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]{11})/)
+  const match = url.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/)
   if (!match) throw new Error('Invalid YouTube URL')
   const videoId = match[1]
 
-  // Fetch transcript via YouTube Transcript API (unofficial)
-  const transcriptRes = await fetch(
-    `https://www.youtube.com/watch?v=${videoId}`,
-    { headers: { 'User-Agent': 'Mozilla/5.0' } }
-  )
-  const html = await transcriptRes.text()
-
-  // Extract title
+  // Fetch title from YouTube page
+  const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  })
+  const html = await pageRes.text()
   const titleMatch = html.match(/<title>(.+?)<\/title>/)
-  const title = titleMatch ? titleMatch[1].replace(' - YouTube', '') : 'YouTube Video'
+  const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
 
-  // Use Groq to summarize the video directly via description if transcript unavailable
-  // For now return placeholder — Phase 2 will wire in full transcript extraction
-  return { title, transcript: `[Transcript for video ${videoId} — Phase 2 will extract full transcript]` }
+  // Fetch transcript
+  const { YoutubeTranscript } = await import('youtube-transcript')
+  const segments = await YoutubeTranscript.fetchTranscript(videoId)
+  if (!segments || segments.length === 0) {
+    throw new Error('No transcript available for this video. Try a video with captions enabled.')
+  }
+  const transcript = segments.map(s => s.text).join(' ')
+
+  return { title, transcript }
 }
 
 async function summarizeText(
