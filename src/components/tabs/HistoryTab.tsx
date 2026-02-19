@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Clock, Trash2, ChevronDown, ChevronUp, Youtube, FileText, Type, Mic, RefreshCw } from 'lucide-react'
+import { useState, useEffect, useMemo } from 'react'
+import { Clock, Trash2, ChevronDown, ChevronUp, Youtube, FileText, Type, Mic, RefreshCw, Search, X } from 'lucide-react'
 import SummaryResult from '@/components/SummaryResult'
 
 interface Summary {
@@ -17,18 +17,19 @@ interface Summary {
   next_steps: string[]
 }
 
+const TYPES = [
+  { id: 'all',     label: 'All' },
+  { id: 'youtube', label: 'YouTube', Icon: Youtube },
+  { id: 'article', label: 'Article', Icon: FileText },
+  { id: 'podcast', label: 'Podcast', Icon: Mic },
+  { id: 'text',    label: 'Text',    Icon: Type },
+] as const
+
 const TYPE_ICON: Record<string, React.ReactNode> = {
   youtube: <Youtube size={12} />,
   article: <FileText size={12} />,
   text:    <Type size={12} />,
   podcast: <Mic size={12} />,
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  youtube: 'YouTube',
-  article: 'Article',
-  text:    'Text',
-  podcast: 'Podcast',
 }
 
 function timeAgo(iso: string) {
@@ -46,6 +47,8 @@ export default function HistoryTab() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('all')
 
   async function load() {
     setLoading(true)
@@ -75,12 +78,31 @@ export default function HistoryTab() {
     }
   }
 
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase().trim()
+    return items.filter(item => {
+      const matchesType = typeFilter === 'all' || item.type === typeFilter
+      const matchesSearch = !q ||
+        item.title.toLowerCase().includes(q) ||
+        item.podcast_name?.toLowerCase().includes(q) ||
+        item.summary.toLowerCase().includes(q)
+      return matchesType && matchesSearch
+    })
+  }, [items, search, typeFilter])
+
+  const hasFilters = search || typeFilter !== 'all'
+
   return (
     <div className="space-y-4">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-[var(--text)]">History</h2>
-          <p className="text-sm text-[var(--muted)]">Your last 50 summaries</p>
+          <p className="text-sm text-[var(--muted)]">
+            {items.length > 0
+              ? `${filtered.length} of ${items.length} summaries`
+              : 'Your last 50 summaries'}
+          </p>
         </div>
         <button
           onClick={load}
@@ -90,6 +112,56 @@ export default function HistoryTab() {
         </button>
       </div>
 
+      {/* Search + filters — only show once items are loaded */}
+      {!loading && items.length > 0 && (
+        <div className="space-y-2">
+          {/* Search input */}
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--muted)]" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search titles, podcasts, summaries…"
+              className="w-full rounded-full border border-[var(--border)] bg-[var(--surface)] py-2 pl-9 pr-9 text-sm text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted)] hover:text-[var(--text)]"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          {/* Type filter pills */}
+          <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+            {TYPES.map(({ id, label }) => (
+              <button
+                key={id}
+                onClick={() => setTypeFilter(id)}
+                className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium transition-all ${
+                  typeFilter === id
+                    ? 'bg-[var(--accent)] text-white'
+                    : 'border border-[var(--border)] text-[var(--muted)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+            {hasFilters && (
+              <button
+                onClick={() => { setSearch(''); setTypeFilter('all') }}
+                className="flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors"
+              >
+                <X size={11} /> Clear
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Loading */}
       {loading && (
         <div className="flex justify-center py-12">
           <div className="flex gap-1.5">
@@ -101,6 +173,7 @@ export default function HistoryTab() {
         </div>
       )}
 
+      {/* Empty states */}
       {!loading && items.length === 0 && (
         <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
           <Clock size={32} className="text-[var(--border)]" />
@@ -111,13 +184,22 @@ export default function HistoryTab() {
         </div>
       )}
 
+      {!loading && items.length > 0 && filtered.length === 0 && (
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+          <Search size={28} className="text-[var(--border)]" />
+          <p className="text-sm font-medium text-[var(--text)]">No results</p>
+          <p className="text-xs text-[var(--muted)]">Try a different search or filter</p>
+        </div>
+      )}
+
+      {/* Results list */}
       <div className="space-y-2">
-        {items.map(item => (
+        {filtered.map(item => (
           <div key={item.id} className="rounded border border-[var(--border)] bg-[var(--surface)]">
             <div className="flex items-center gap-3 px-4 py-3">
               <span className="flex items-center gap-1 rounded-full bg-[var(--bg)] px-2 py-0.5 text-[10px] font-medium text-[var(--accent)]">
                 {TYPE_ICON[item.type] ?? <FileText size={12} />}
-                {TYPE_LABEL[item.type] ?? item.type}
+                {TYPES.find(t => t.id === item.type)?.label ?? item.type}
               </span>
 
               <button
@@ -138,8 +220,10 @@ export default function HistoryTab() {
                 >
                   <Trash2 size={14} />
                 </button>
-                <button onClick={() => setExpanded(e => e === item.id ? null : item.id)}
-                  className="text-[var(--muted)]">
+                <button
+                  onClick={() => setExpanded(e => e === item.id ? null : item.id)}
+                  className="text-[var(--muted)]"
+                >
                   {expanded === item.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                 </button>
               </div>
