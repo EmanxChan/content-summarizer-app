@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData()
     const file = formData.get('file') as File | null
     const words = Number(formData.get('words') || 300)
+    const instructions = (formData.get('instructions') as string) || ''
 
     if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     if (file.size > MAX_BYTES) {
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
 insights: 5 concise, bold takeaways (one sentence each).
 highlights: 3-5 memorable quotes or key statements directly from the content.
 summary: executive summary of ${words} words.
-next_steps: 3 specific, actionable steps the reader should take.`,
+next_steps: 3 specific, actionable steps the reader should take.${instructions ? `\n\nAdditional focus: ${instructions}` : ''}`,
         },
         {
           role: 'user',

@@ -4,6 +4,7 @@ import { useState, useRef } from 'react'
 import { Upload, FileAudio, FileVideo, FileText, X } from 'lucide-react'
 import Button from '@/components/ui/Button'
 import SummaryResult from '@/components/SummaryResult'
+import { useWordCount } from '@/hooks/useWordCount'
 
 const ACCEPTED = '.mp3,.m4a,.wav,.ogg,.aac,.mp4,.mov,.webm,.pdf'
 const MAX_MB = 24
@@ -33,7 +34,8 @@ const STEPS: Record<string, string> = {
 export default function UploadTab() {
   const [file, setFile] = useState<File | null>(null)
   const [dragging, setDragging] = useState(false)
-  const [words, setWords] = useState(300)
+  const [words, setWords] = useWordCount()
+  const [instructions, setInstructions] = useState('')
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState('')
   const [result, setResult] = useState<{
@@ -74,6 +76,7 @@ export default function UploadTab() {
       const formData = new FormData()
       formData.append('file', file)
       formData.append('words', String(words))
+      formData.append('instructions', instructions)
 
       setStep('uploading')
       const res = await fetch('/api/upload', { method: 'POST', body: formData })
@@ -87,7 +90,7 @@ export default function UploadTab() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          type: data.fileType === 'pdf' ? 'text' : 'youtube',
+          type: data.fileType === 'pdf' ? 'text' : 'upload',
           title: data.title,
           summary: data.summary,
           insights: data.insights,
@@ -170,6 +173,12 @@ export default function UploadTab() {
           />
         </div>
 
+        <input
+          value={instructions}
+          onChange={e => setInstructions(e.target.value)}
+          placeholder="Custom focus e.g. 'list all action items' (optional)"
+          className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
         <Button type="submit" loading={loading} disabled={!file} className="w-full">
           {loading ? (STEPS[step] || 'Processing…') : 'Transcribe & Summarize'}
         </Button>
@@ -181,7 +190,7 @@ export default function UploadTab() {
         </div>
       )}
 
-      {result && <SummaryResult {...result} />}
+      {result && <SummaryResult {...result} onRegenerate={handleSubmit as unknown as () => void} />}
     </div>
   )
 }

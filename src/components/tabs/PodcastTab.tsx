@@ -5,6 +5,7 @@ import { Mic, Search, Link, Clock, ExternalLink } from 'lucide-react'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import SummaryResult from '@/components/SummaryResult'
+import { useWordCount } from '@/hooks/useWordCount'
 
 interface PodcastResult {
   title: string
@@ -30,7 +31,8 @@ function formatDuration(secs: number) {
 export default function PodcastTab() {
   const [mode, setMode] = useState<'search' | 'url'>('search')
   const [query, setQuery] = useState('')
-  const [words, setWords] = useState(300)
+  const [words, setWords] = useWordCount()
+  const [instructions, setInstructions] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<PodcastResult | null>(null)
   const [error, setError] = useState('')
@@ -45,7 +47,7 @@ export default function PodcastTab() {
       const res = await fetch('/api/podcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), words }),
+        body: JSON.stringify({ query: query.trim(), words, instructions }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to process podcast')
@@ -113,6 +115,12 @@ export default function PodcastTab() {
           />
         </div>
 
+        <input
+          value={instructions}
+          onChange={e => setInstructions(e.target.value)}
+          placeholder="Custom focus e.g. 'focus on guest's key arguments' (optional)"
+          className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
         <Button type="submit" loading={loading} className="w-full">
           <Mic size={14} />
           {loading ? 'Processing podcast…' : 'Summarize Episode'}
@@ -189,6 +197,9 @@ export default function PodcastTab() {
             title={result.title}
             summary={result.summary}
             insights={result.insights}
+            highlights={result.highlights}
+            next_steps={result.next_steps}
+            onRegenerate={handleSubmit as unknown as () => void}
           />
         </div>
       )}

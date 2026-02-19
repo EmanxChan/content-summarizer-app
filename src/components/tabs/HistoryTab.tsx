@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { Clock, Trash2, ChevronDown, ChevronUp, Youtube, FileText, Type, Mic, RefreshCw, Search, X } from 'lucide-react'
+import { Clock, Trash2, ChevronDown, ChevronUp, Youtube, FileText, Type, Mic, Upload, RefreshCw, Search, X, Share2, Check } from 'lucide-react'
 import SummaryResult from '@/components/SummaryResult'
 
 interface Summary {
@@ -23,6 +23,7 @@ const TYPES = [
   { id: 'article', label: 'Article', Icon: FileText },
   { id: 'podcast', label: 'Podcast', Icon: Mic },
   { id: 'text',    label: 'Text',    Icon: Type },
+  { id: 'upload',  label: 'Upload',  Icon: Upload },
 ] as const
 
 const TYPE_ICON: Record<string, React.ReactNode> = {
@@ -30,6 +31,7 @@ const TYPE_ICON: Record<string, React.ReactNode> = {
   article: <FileText size={12} />,
   text:    <Type size={12} />,
   podcast: <Mic size={12} />,
+  upload:  <Upload size={12} />,
 }
 
 function timeAgo(iso: string) {
@@ -47,6 +49,20 @@ export default function HistoryTab() {
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState<string | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [shared, setShared] = useState<string | null>(null)
+
+  async function handleShare(item: Summary) {
+    const text = `${item.title}\n\n${item.summary}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: item.title, text })
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
+      setShared(item.id)
+      setTimeout(() => setShared(null), 2000)
+    } catch { /* dismissed */ }
+  }
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('all')
 
@@ -213,6 +229,13 @@ export default function HistoryTab() {
               </button>
 
               <div className="flex shrink-0 items-center gap-2">
+                <button
+                  onClick={() => handleShare(item)}
+                  className="text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
+                  title="Share"
+                >
+                  {shared === item.id ? <Check size={14} className="text-green-500" /> : <Share2 size={14} />}
+                </button>
                 <button
                   onClick={() => handleDelete(item.id)}
                   disabled={deleting === item.id}

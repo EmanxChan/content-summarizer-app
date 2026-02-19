@@ -160,7 +160,7 @@ function isRssUrl(url: string) {
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { query, words = 300 } = await req.json()
+    const { query, words = 300, instructions = '' } = await req.json()
     if (!query?.trim()) return NextResponse.json({ error: 'Query required' }, { status: 400 })
 
     const input = query.trim()
@@ -239,7 +239,7 @@ export async function POST(req: NextRequest) {
 insights: 5 concise, bold takeaways (one sentence each).
 highlights: 3-5 memorable quotes or key statements from the episode.
 summary: executive summary of ${words} words.
-next_steps: 3 specific, actionable steps the listener should take.`,
+next_steps: 3 specific, actionable steps the listener should take.${instructions ? `\n\nAdditional focus: ${instructions}` : ''}`,
         },
         {
           role: 'user',

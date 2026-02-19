@@ -4,16 +4,19 @@ import { useState } from 'react'
 import Input from '@/components/ui/Input'
 import Button from '@/components/ui/Button'
 import SummaryResult from '@/components/SummaryResult'
+import { useWordCount } from '@/hooks/useWordCount'
+
+type Result = { title: string; summary: string; insights: string[]; highlights: string[]; next_steps: string[] }
 
 export default function YoutubeTab() {
   const [url, setUrl] = useState('')
-  const [words, setWords] = useState(300)
+  const [words, setWords] = useWordCount()
+  const [instructions, setInstructions] = useState('')
   const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState<{ title: string; summary: string; insights: string[]; highlights: string[]; next_steps: string[] } | null>(null)
+  const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
+  async function run() {
     if (!url.trim()) return
     setLoading(true)
     setError('')
@@ -22,7 +25,7 @@ export default function YoutubeTab() {
       const res = await fetch('/api/summarize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), words }),
+        body: JSON.stringify({ url: url.trim(), words, instructions }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to summarize')
@@ -35,6 +38,8 @@ export default function YoutubeTab() {
       setLoading(false)
     }
   }
+
+  function handleSubmit(e: React.FormEvent) { e.preventDefault(); run() }
 
   return (
     <div className="space-y-4">
@@ -49,29 +54,28 @@ export default function YoutubeTab() {
           onChange={e => setUrl(e.target.value)}
           placeholder="https://youtube.com/watch?v=..."
           type="url"
+          onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run() }}
         />
         <div className="flex items-center gap-3">
           <label className="text-xs text-[var(--muted)] whitespace-nowrap">
-            Summary length: <span className="font-semibold text-[var(--accent)]">{words} words</span>
+            Length: <span className="font-semibold text-[var(--accent)]">{words} words</span>
           </label>
-          <input
-            type="range" min={100} max={1000} step={50}
-            value={words} onChange={e => setWords(Number(e.target.value))}
-            className="flex-1 accent-[var(--accent)]"
-          />
+          <input type="range" min={100} max={1000} step={50} value={words}
+            onChange={e => setWords(Number(e.target.value))} className="flex-1 accent-[var(--accent)]" />
         </div>
+        <input
+          value={instructions}
+          onChange={e => setInstructions(e.target.value)}
+          placeholder="Custom focus e.g. 'focus on business implications' (optional)"
+          className="w-full rounded border border-[var(--border)] bg-[var(--surface)] px-3 py-2 text-xs text-[var(--text)] placeholder:text-[var(--muted)] focus:border-[var(--accent)] focus:outline-none"
+        />
         <Button type="submit" loading={loading} className="w-full">
           {loading ? 'Summarizing…' : 'Summarize'}
         </Button>
       </form>
 
-      {error && (
-        <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-
-      {result && <SummaryResult {...result} />}
+      {error && <div className="rounded border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">{error}</div>}
+      {result && <SummaryResult {...result} onRegenerate={run} />}
     </div>
   )
 }

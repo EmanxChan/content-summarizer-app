@@ -59,7 +59,7 @@ async function extractWithTavily(url: string): Promise<{ title: string; content:
 
 export async function POST(req: NextRequest) {
   try {
-    const { url, words = 300 } = await req.json()
+    const { url, words = 300, instructions = '' } = await req.json()
     if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })
 
     // X/Twitter needs Jina (has auth bypass); everything else uses Tavily
@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
 insights: 5 concise, bold takeaways (one sentence each).
 highlights: 3-5 memorable quotes or key statements directly from the content.
 summary: executive summary of ${words} words.
-next_steps: 3 specific, actionable steps the reader should take.`,
+next_steps: 3 specific, actionable steps the reader should take.${instructions ? `\n\nAdditional focus: ${instructions}` : ''}`,
         },
         {
           role: 'user',

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
-import { Copy, Check, Download, FileText, FileDown, Printer } from 'lucide-react'
+import { Copy, Check, Download, FileText, FileDown, Printer, RefreshCw, Share2 } from 'lucide-react'
 import Card from '@/components/ui/Card'
 import ChatSection from '@/components/ChatSection'
 
@@ -11,6 +11,7 @@ interface Props {
   insights: string[]
   highlights?: string[]
   next_steps?: string[]
+  onRegenerate?: () => void
 }
 
 const INSIGHT_EMOJIS = ['🎯', '💡', '⚠️', '🔄', '🧠']
@@ -21,8 +22,10 @@ export default function SummaryResult({
   insights,
   highlights = [],
   next_steps = [],
+  onRegenerate,
 }: Props) {
   const [copied, setCopied] = useState(false)
+  const [shared, setShared] = useState(false)
   const [showDownload, setShowDownload] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -93,6 +96,19 @@ export default function SummaryResult({
     setTimeout(() => setCopied(false), 2000)
   }
 
+  async function share() {
+    const text = buildText()
+    try {
+      if (navigator.share) {
+        await navigator.share({ title, text })
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
+      setShared(true)
+      setTimeout(() => setShared(false), 2000)
+    } catch { /* dismissed */ }
+  }
+
   return (
     <div className="space-y-4 pt-2">
 
@@ -100,6 +116,21 @@ export default function SummaryResult({
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-base font-semibold text-[var(--text)] leading-snug">{title}</h3>
         <div className="flex shrink-0 items-center gap-3">
+          {onRegenerate && (
+            <button
+              onClick={onRegenerate}
+              className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
+            >
+              <RefreshCw size={13} /> Regenerate
+            </button>
+          )}
+          <button
+            onClick={share}
+            className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)] transition-colors"
+          >
+            {shared ? <Check size={13} className="text-green-500" /> : <Share2 size={13} />}
+            {shared ? 'Shared!' : 'Share'}
+          </button>
           <button
             onClick={copy}
             className="flex items-center gap-1 text-xs text-[var(--muted)] hover:text-[var(--accent)] transition-colors"

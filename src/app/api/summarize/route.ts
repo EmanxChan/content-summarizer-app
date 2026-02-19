@@ -29,7 +29,7 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
   const { YoutubeTranscript } = await import('youtube-transcript')
   const segments = await YoutubeTranscript.fetchTranscript(videoId)
   if (!segments || segments.length === 0) {
-    throw new Error('No transcript available for this video. Try a video with captions enabled.')
+    throw new Error('No captions found for this video. The creator has not enabled transcripts — try a different video.')
   }
   const transcript = segments.map(s => s.text).join(' ')
 
@@ -39,7 +39,8 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
 async function summarizeText(
   text: string,
   title: string,
-  wordCount: number
+  wordCount: number,
+  instructions?: string
 ): Promise<{ summary: string; insights: string[]; highlights: string[]; next_steps: string[] }> {
   const completion = await getGroq().chat.completions.create({
     model: MODEL(),
@@ -51,7 +52,7 @@ async function summarizeText(
 insights: 5 concise, bold takeaways (one sentence each).
 highlights: 3-5 memorable quotes or key statements directly from the content.
 summary: executive summary of ${wordCount} words.
-next_steps: 3 specific, actionable steps the reader should take.`,
+next_steps: 3 specific, actionable steps the reader should take.${instructions ? `\n\nAdditional focus: ${instructions}` : ''}`,
       },
       {
         role: 'user',
@@ -76,7 +77,7 @@ next_steps: 3 specific, actionable steps the reader should take.`,
 export async function POST(req: NextRequest) {
   try {
     const contentType = req.headers.get('content-type') || ''
-    let url = '', text = '', words = 300
+    let url = '', text = '', words = 300, instructions = ''
 
     if (contentType.includes('multipart/form-data')) {
       // File upload — Phase 5
@@ -86,6 +87,7 @@ export async function POST(req: NextRequest) {
       url = body.url || ''
       text = body.text || ''
       words = body.words || 300
+      instructions = body.instructions || ''
     }
 
     let title = 'Content'
@@ -103,7 +105,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No content to summarize' }, { status: 400 })
     }
 
-    const result = await summarizeText(transcript, title, words)
+    const result = await summarizeText(transcript, title, words, instructions)
     return NextResponse.json({ title, ...result })
   } catch (err: unknown) {
     console.error('Summarize error:', err)
