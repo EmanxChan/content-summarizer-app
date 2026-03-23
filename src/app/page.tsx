@@ -43,12 +43,12 @@ export default function Home() {
     <div className="relative flex min-h-dvh flex-col">
       <Header />
 
-      <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-24 pt-4 md:pb-8">
+      <main className="mx-auto w-full max-w-2xl flex-1 px-4 pb-20 pt-3 md:pb-8">
         {/* Animated brand bar */}
-        <div className="gradient-bar mb-4 h-0.5 w-full rounded-full" />
+        <div className="gradient-bar mb-3 h-0.5 w-full rounded-full" />
 
         {/* Desktop tab bar */}
-        <div className="mb-6 hidden overflow-x-auto md:flex md:gap-1">
+        <div className="mb-4 hidden md:flex md:flex-wrap md:justify-center md:gap-1">
           {TABS.map(({ id, label, Icon }) => {
             const isActive = activeTab === id
             return (
@@ -56,30 +56,17 @@ export default function Home() {
                 key={id}
                 onClick={() => setActiveTab(id)}
                 className={clsx(
-                  'flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all',
+                  'flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 text-xs font-medium transition-all',
                   isActive
                     ? 'bg-[var(--accent)] text-white'
                     : 'text-[var(--muted)] hover:bg-[var(--surface)] hover:text-[var(--text)]'
                 )}
               >
-                <Icon size={14} strokeWidth={isActive ? 2.5 : 1.75} />
+                <Icon size={12} strokeWidth={isActive ? 2.5 : 1.75} />
                 {label}
               </button>
             )
           })}
-        </div>
-
-        {/* Mobile: active tab label */}
-        <div className="mb-4 flex items-center gap-2 md:hidden">
-          {(() => {
-            const t = TABS.find(t => t.id === activeTab)
-            return t ? (
-              <>
-                <t.Icon size={16} className="text-[var(--accent)]" />
-                <span className="text-sm font-semibold text-[var(--text)]">{t.label}</span>
-              </>
-            ) : null
-          })()}
         </div>
 
         {/* Tab content */}

@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Content Summarizer',
+  title: 'e-man sumhub',
   description: 'AI-powered summaries for YouTube, podcasts, articles, and more',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Summarizer',
+    title: 'sumhub',
   },
 }
 

@@ -1,6 +1,6 @@
 {
-  "name": "Content Summarizer",
-  "short_name": "Summarizer",
+  "name": "e-man sumhub",
+  "short_name": "sumhub",
   "description": "AI-powered summaries for YouTube, podcasts, articles, and more",
   "start_url": "/",
   "display": "standalone",
