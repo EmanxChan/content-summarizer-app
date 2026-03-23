@@ -22,10 +22,12 @@ export default function Header() {
     <header className="sticky top-0 z-40 w-full border-b border-[var(--border)] bg-[var(--bg)]/90 backdrop-blur-sm">
       <div className="mx-auto flex h-14 max-w-5xl items-center justify-between px-4">
         {/* Logo */}
-        <div className="flex items-center gap-2">
-          <span className="gradient-bar h-5 w-1 rounded-full" />
-          <span className="text-base font-bold tracking-tight text-[var(--text)]">
-            Content<span className="text-[var(--accent)]">·AI</span>
+        <div className="flex items-center gap-1.5" style={{ fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif" }}>
+          <span style={{ backgroundColor: '#008080', color: '#fff', padding: '0 0.2em', display: 'inline-block', lineHeight: '0.75', fontWeight: 700, fontSize: '1.1rem' }}>
+            e-man
+          </span>
+          <span style={{ fontWeight: 700, fontSize: '1.1rem' }} className="text-[var(--text)]">
+            sumhub
           </span>
         </div>
 
