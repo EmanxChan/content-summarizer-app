@@ -11,6 +11,7 @@ function getGroq() {
 }
 
 const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+const JINA_API_KEY = () => process.env.JINA_API_KEY
 
 interface ContentContext {
   title?: string
@@ -23,19 +24,22 @@ interface HistoryMessage {
   content: string
 }
 
-async function tavilySearch(query: string) {
-  const res = await fetch('https://api.tavily.com/search', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      api_key: process.env.TAVILY_API_KEY,
-      query,
-      max_results: 5,
-      include_answer: true,
-    }),
-  })
-  if (!res.ok) throw new Error('Tavily search failed')
-  return res.json()
+// Jina Search API — free tier works without key, optional key for higher limits
+async function jinaSearch(query: string) {
+  const encoded = encodeURIComponent(query)
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+  }
+  const apiKey = JINA_API_KEY()
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
+
+  const res = await fetch(`https://r.jina.ai/search?query=${encoded}&limit=5`, { headers })
+  if (!res.ok) throw new Error(`Jina search failed: ${res.status}`)
+
+  const data = await res.json()
+  return data
 }
 
 export async function POST(req: NextRequest) {
@@ -57,21 +61,26 @@ export async function POST(req: NextRequest) {
     let searchContext = ''
     const sources: { title: string; url: string }[] = []
 
-    // Tavily web search
-    if (webSearch && process.env.TAVILY_API_KEY) {
+    // Jina web search (free, no API key required for basic use)
+    if (webSearch) {
       try {
         const enrichedQuery = contentContext?.title
           ? `${question} ${contentContext.title}`
           : question
-        const results = await tavilySearch(enrichedQuery)
+        const data = await jinaSearch(enrichedQuery)
 
-        if (results.answer) searchContext += `Quick answer: ${results.answer}\n\n`
-        for (const r of results.results || []) {
-          searchContext += `Source: ${r.title}\n${(r.content || '').slice(0, 500)}\n\n`
-          sources.push({ title: r.title, url: r.url })
+        // Jina returns { results: [{ title, url, content }] }
+        if (data.results && data.results.length > 0) {
+          for (const r of data.results) {
+            const snippet = (r.content || '').slice(0, 500).trim()
+            if (snippet) {
+              searchContext += `Source: ${r.title}\n${snippet}\n\n`
+              sources.push({ title: r.title, url: r.url })
+            }
+          }
         }
       } catch (e) {
-        console.warn('Tavily search failed, continuing without web results:', e)
+        console.warn('Jina search failed, continuing without web results:', e)
       }
     }
 
