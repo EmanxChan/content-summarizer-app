@@ -43,9 +43,11 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
       const titleMatch = html.match(/<title>(.+?)<\/title>/)
       const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
       return { title, transcript }
+    } else {
+      console.log('youtube-transcript-plus returned', segments?.length ?? 0, 'segments for', videoId)
     }
   } catch (e) {
-    console.log('youtube-transcript-plus failed:', (e as Error).message)
+    console.error('youtube-transcript-plus FAILED:', e instanceof Error ? e.stack : e)
   }
 
   // ── Attempt 2: youtube-transcript (legacy fallback) ───────────────────
@@ -61,9 +63,11 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
       const titleMatch = html.match(/<title>(.+?)<\/title>/)
       const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
       return { title, transcript }
+    } else {
+      console.log('youtube-transcript returned', segments?.length ?? 0, 'segments for', videoId)
     }
   } catch (e) {
-    console.log('youtube-transcript fallback failed:', (e as Error).message)
+    console.error('youtube-transcript FAILED:', e instanceof Error ? e.stack : e)
   }
 
   throw new Error('No transcript available for this video. The creator has not enabled captions/subtitles. Try a different video.')
