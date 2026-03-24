@@ -17,15 +17,27 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
   if (!match) throw new Error('Invalid YouTube URL')
   const videoId = match[1]
 
-  // ── Attempt 1: youtube-transcript package ─────────────────────────────
+  // ── Attempt 1: youtube-transcript-plus (works as of March 2026) ───────
   try {
-    const { YoutubeTranscript } = await import('youtube-transcript')
+    const { YoutubeTranscript } = await import('youtube-transcript-plus')
     const segments = await YoutubeTranscript.fetchTranscript(videoId)
     if (segments && segments.length > 0) {
-      const transcript = segments.map(s => s.text).join(' ')
-      // Also fetch title from page
+      const transcript = segments
+        .map(s => s.text)
+        .join(' ')
+        // Decode common HTML entities
+        .replace(/&#39;/g, "'")
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&#x27;/g, "'")
+        .replace(/&#x2F;/g, '/')
+
+      // Get title from page
       const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' },
       })
       const html = await pageRes.text()
       const titleMatch = html.match(/<title>(.+?)<\/title>/)
@@ -33,28 +45,25 @@ async function getYouTubeTranscript(url: string): Promise<{ title: string; trans
       return { title, transcript }
     }
   } catch (e) {
-    console.log('youtube-transcript failed:', (e as Error).message)
-    // Fall through to next attempt
+    console.log('youtube-transcript-plus failed:', (e as Error).message)
   }
 
-  // ── Attempt 2: oEmbed fallback (description only) ────────────────────
+  // ── Attempt 2: youtube-transcript (legacy fallback) ───────────────────
   try {
-    const oembedRes = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
-    )
-    if (oembedRes.ok) {
-      const oembed = await oembedRes.json() as { title?: string; description?: string }
-      const title = oembed.title || 'YouTube Video'
-      // oEmbed only gives title, no description - but at least we got the title
-      if (oembed.title) {
-        return { 
-          title, 
-          transcript: `Video titled "${title}". No transcript available - the creator has not enabled captions/subtitles for this video.` 
-        }
-      }
+    const { YoutubeTranscript: LegacyTranscript } = await import('youtube-transcript')
+    const segments = await LegacyTranscript.fetchTranscript(videoId)
+    if (segments && segments.length > 0) {
+      const transcript = segments.map(s => s.text).join(' ')
+      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0' },
+      })
+      const html = await pageRes.text()
+      const titleMatch = html.match(/<title>(.+?)<\/title>/)
+      const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
+      return { title, transcript }
     }
   } catch (e) {
-    console.log('oEmbed fallback failed:', (e as Error).message)
+    console.log('youtube-transcript fallback failed:', (e as Error).message)
   }
 
   throw new Error('No transcript available for this video. The creator has not enabled captions/subtitles. Try a different video.')
