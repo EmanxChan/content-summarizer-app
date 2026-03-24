@@ -11,21 +11,22 @@ function getGroq() {
 }
 
 const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
-
-function isXUrl(url: string) {
-  return url.includes('x.com/') || url.includes('twitter.com/')
-}
+const JINA_API_KEY = () => process.env.JINA_API_KEY
 
 async function extractWithJina(url: string): Promise<{ title: string; content: string }> {
-  const res = await fetch(`https://r.jina.ai/${url}`, {
-    headers: {
-      Accept: 'text/plain',
-      'X-Return-Format': 'markdown',
-    },
-  })
-  if (!res.ok) throw new Error(`Jina extract failed: ${res.status}`)
-  const text = await res.text()
+  const headers: Record<string, string> = {
+    Accept: 'text/plain',
+    'X-Return-Format': 'markdown',
+  }
+  const apiKey = JINA_API_KEY()
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`
+  }
 
+  const res = await fetch(`https://r.jina.ai/${url}`, { headers })
+  if (!res.ok) throw new Error(`Jina extract failed: ${res.status}`)
+
+  const text = await res.text()
   // Jina returns: "Title: ...\nURL Source: ...\nMarkdown Content:\n..."
   const titleMatch = text.match(/^Title:\s*(.+)/m)
   const title = titleMatch?.[1]?.trim() || new URL(url).hostname
@@ -35,40 +36,19 @@ async function extractWithJina(url: string): Promise<{ title: string; content: s
   return { title, content }
 }
 
-async function extractWithTavily(url: string): Promise<{ title: string; content: string }> {
-  const res = await fetch('https://api.tavily.com/extract', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${process.env.TAVILY_API_KEY}`,
-    },
-    body: JSON.stringify({ urls: [url] }),
-  })
-
-  if (!res.ok) throw new Error(`Tavily extract failed: ${res.status}`)
-  const data = await res.json()
-
-  const result = data.results?.[0]
-  if (!result) throw new Error('No content extracted')
-
-  return {
-    title: result.title || new URL(url).hostname,
-    content: result.raw_content || result.text || '',
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { url, words = 300, instructions = '' } = await req.json()
     if (!url) return NextResponse.json({ error: 'URL required' }, { status: 400 })
 
-    // X/Twitter needs Jina (has auth bypass); everything else uses Tavily
-    const { title, content } = isXUrl(url)
-      ? await extractWithJina(url)
-      : await extractWithTavily(url)
+    // Use Jina for all URLs (X/Twitter, Substack, news, etc.)
+    const { title, content } = await extractWithJina(url)
 
     if (!content || content.length < 100) {
-      return NextResponse.json({ error: 'Could not extract article content' }, { status: 422 })
+      return NextResponse.json(
+        { error: 'Could not extract article content. The site may be blocking extraction.' },
+        { status: 422 }
+      )
     }
 
     // Summarize with Groq
