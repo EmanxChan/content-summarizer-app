@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 import OpenAI from 'openai'
+import { execSync } from 'child_process'
+import fs from 'fs'
+import path from 'path'
+import os from 'os'
 
 function getGroq() {
   return new OpenAI({
@@ -45,17 +49,65 @@ export async function POST(req: NextRequest) {
     let content = ''
     let fileType: 'audio' | 'pdf' = isAudio ? 'audio' : 'pdf'
 
-    // ── PDF: extract text ──────────────────────────────────────────────────
+    // ── PDF: extract text (multi-step fallback) ───────────────────────────────
     if (isPdf) {
       const buffer = Buffer.from(await file.arrayBuffer())
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pdfParseMod = await import('pdf-parse') as any
-      const parsed = await (pdfParseMod.default ?? pdfParseMod)(buffer) as { text: string; info: Record<string, string> }
-      content = parsed.text?.trim() || ''
-      if (parsed.info?.Title) title = parsed.info.Title
-      if (!content || content.length < 50) {
-        return NextResponse.json({ error: 'Could not extract text from this PDF — it may be scanned or image-based' }, { status: 422 })
+      let extractedText = ''
+      let extractionMethod = ''
+
+      // ── Attempt 1: pdf-parse ──────────────────────────────────────────────
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pdfParseMod = await import('pdf-parse') as any
+        const parsed = await (pdfParseMod.default ?? pdfParseMod)(buffer) as { text: string; info: Record<string, string> }
+        extractedText = parsed.text?.trim() || ''
+        if (parsed.info?.Title) title = parsed.info.Title
+        extractionMethod = 'pdf-parse'
+      } catch {
+        extractedText = ''
       }
+
+      // ── Attempt 2: lit (LiteParse) — has built-in OCR fallback ───────────
+      if (!extractedText || extractedText.length < 50) {
+        const tmpPath = path.join(os.tmpdir(), `pdf-upload-${Date.now()}.pdf`)
+        fs.writeFileSync(tmpPath, buffer)
+        try {
+          const litOut = execSync(`lit parse "${tmpPath}"`, { timeout: 60000, encoding: 'utf-8' })
+          if (litOut && litOut.trim().length > 50) {
+            extractedText = litOut.trim()
+            extractionMethod = 'lit'
+          }
+        } catch {
+          // lit also failed — try pdftotext as last resort
+        } finally {
+          fs.unlinkSync(tmpPath)
+        }
+      }
+
+      // ── Attempt 3: pdftotext (Xpdf / poppler-utils) ──────────────────────
+      if (!extractedText || extractedText.length < 50) {
+        const tmpPath = path.join(os.tmpdir(), `pdf-upload-${Date.now()}.pdf`)
+        fs.writeFileSync(tmpPath, buffer)
+        try {
+          const pdftotextOut = execSync(`pdftotext "${tmpPath}" -`, { timeout: 30000, encoding: 'utf-8' })
+          if (pdftotextOut && pdftotextOut.trim().length > 50) {
+            extractedText = pdftotextOut.trim()
+            extractionMethod = 'pdftotext'
+          }
+        } catch {
+          // all text extraction failed
+        } finally {
+          if (fs.existsSync(tmpPath)) fs.unlinkSync(tmpPath)
+        }
+      }
+
+      if (!extractedText || extractedText.length < 50) {
+        return NextResponse.json({
+          error: `Could not extract readable text from this PDF — it appears to be a scanned or image-based file. Try running it through an OCR tool (e.g. Adobe Acrobat, Google Docs OCR, or https://ocr.space) and re-uploading the processed PDF.`,
+        }, { status: 422 })
+      }
+
+      content = extractedText
     }
 
     // ── Audio / Video: Groq Whisper ────────────────────────────────────────

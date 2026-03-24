@@ -117,6 +117,60 @@ async function scrapeOgTitle(url: string): Promise<string> {
   }
 }
 
+// ── Resolve Apple Podcasts URL → RSS feed URL ───────────────────────────────
+async function resolveApplePodcastsFeed(url: string): Promise<string | null> {
+  try {
+    // Extract numeric ID from Apple Podcasts URL (e.g. /id123456789)
+    const idMatch = url.match(/\/id(\d+)/)
+    if (idMatch?.[1]) {
+      const lookupRes = await fetch(
+        `https://itunes.apple.com/lookup?id=${idMatch[1]}&entity=podcast`,
+        { signal: AbortSignal.timeout(10000) }
+      )
+      if (lookupRes.ok) {
+        const data = await lookupRes.json() as { results?: { feedUrl?: string }[] }
+        if (data.results?.[0]?.feedUrl) return data.results[0].feedUrl
+      }
+    }
+
+    // Fallback: try scraping the page for the RSS link
+    const pageRes = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const html = await pageRes.text()
+    const rssMatch = html.match(/href=["']([^"']*\.rss[^"']*)["']/i) ||
+                     html.match(/data-feed-url=["']([^"']+)["']/i)
+    return rssMatch?.[1] || null
+  } catch {
+    return null
+  }
+}
+
+// ── Resolve Spotify episode/show URL → RSS feed URL ─────────────────────────
+async function resolveSpotifyFeed(url: string): Promise<string | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36' },
+      signal: AbortSignal.timeout(10000),
+    })
+    const html = await res.text()
+    // Spotify sometimes embeds RSS in og:url or hidden meta
+    const rssMatch = html.match(/["'](https?:\/\/[^"']*\.rss[^"']*)["']/i)
+    if (rssMatch?.[1]) return rssMatch[1]
+
+    // Spotify episodes embed the show RSS in data attributes
+    const showIdMatch = url.match(/spotify\.com\/(episode|show)\/([a-zA-Z0-9]+)/)
+    if (showIdMatch?.[2]) {
+      // Attempt to get the podcast's RSS via OpenSearch hint — fall back to search
+      return null // handled by caller
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 // ── Audio transcription via Groq Whisper ──────────────────────────────────────
 async function transcribeAudio(audioUrl: string): Promise<string> {
   const res = await fetch(audioUrl, { signal: AbortSignal.timeout(30000) })
@@ -160,62 +214,106 @@ function isRssUrl(url: string) {
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
-    const { query, words = 300, instructions = '' } = await req.json()
+    const { query, mode, words = 300, instructions = '' } = await req.json()
     if (!query?.trim()) return NextResponse.json({ error: 'Query required' }, { status: 400 })
 
     const input = query.trim()
     const isUrl = input.startsWith('http://') || input.startsWith('https://')
 
-    let episodeData: EpisodeData
+    let episodeData!: EpisodeData
     let contentForSummary = ''
     let contentSource = 'description'
 
-    // ── Route 1: Direct audio URL ──────────────────────────────────────────
-    if (isUrl && isDirectAudioUrl(input)) {
-      const urlObj = new URL(input)
-      episodeData = {
-        title: urlObj.pathname.split('/').pop()?.replace(/\.[^.]+$/, '') || 'Podcast Episode',
-        podcast: urlObj.hostname,
-        description: '',
-        audioUrl: input,
+    // ── URL mode: trust explicit mode flag, parse RSS directly for Apple/Spotify ──
+    if (mode === 'url') {
+      // Route URL1: Direct audio URL
+      if (isUrl && isDirectAudioUrl(input)) {
+        const urlObj = new URL(input)
+        episodeData = {
+          title: urlObj.pathname.split('/').pop()?.replace(/\.[^.]+$/, '') || 'Podcast Episode',
+          podcast: urlObj.hostname,
+          description: '',
+          audioUrl: input,
+        }
+        contentForSummary = await transcribeAudio(input)
+        contentSource = 'transcript'
       }
-      contentForSummary = await transcribeAudio(input)
-      contentSource = 'transcript'
-    }
 
-    // ── Route 2: RSS feed URL ──────────────────────────────────────────────
-    else if (isUrl && isRssUrl(input)) {
-      const rss = await parseRssFeed(input)
-      episodeData = rss
-      if (rss.transcriptUrl) {
-        const t = await fetchTranscript(rss.transcriptUrl)
-        if (t) { contentForSummary = t; contentSource = 'transcript' }
+      // Route URL2: RSS feed URL — parse directly without re-search
+      else if (isUrl && isRssUrl(input)) {
+        const rss = await parseRssFeed(input)
+        episodeData = rss
+        if (rss.transcriptUrl) {
+          const t = await fetchTranscript(rss.transcriptUrl)
+          if (t) { contentForSummary = t; contentSource = 'transcript' }
+        }
+        if (!contentForSummary && rss.audioUrl && isDirectAudioUrl(rss.audioUrl)) {
+          try {
+            contentForSummary = await transcribeAudio(rss.audioUrl)
+            contentSource = 'transcript'
+          } catch { /* fall through */ }
+        }
+        contentForSummary = contentForSummary || rss.description
       }
-      if (!contentForSummary && rss.audioUrl && isDirectAudioUrl(rss.audioUrl)) {
-        try {
-          contentForSummary = await transcribeAudio(rss.audioUrl)
-          contentSource = 'transcript'
-        } catch { /* fall through */ }
+
+      // Route URL3: Apple Podcasts — resolve RSS feed and parse directly
+      else if (isUrl && input.includes('podcasts.apple.com')) {
+        const feedUrl = await resolveApplePodcastsFeed(input)
+        if (feedUrl) {
+          const rss = await parseRssFeed(feedUrl)
+          episodeData = rss
+          if (rss.transcriptUrl) {
+            const t = await fetchTranscript(rss.transcriptUrl)
+            if (t) { contentForSummary = t; contentSource = 'transcript' }
+          }
+          if (!contentForSummary && rss.audioUrl && isDirectAudioUrl(rss.audioUrl)) {
+            try {
+              contentForSummary = await transcribeAudio(rss.audioUrl)
+              contentSource = 'transcript'
+            } catch { /* fall through */ }
+          }
+          contentForSummary = contentForSummary || rss.description
+        }
+        if (!contentForSummary) {
+          return NextResponse.json({ error: 'Could not resolve RSS feed for this Apple Podcasts URL. Try pasting the RSS feed URL directly.' }, { status: 422 })
+        }
       }
-      contentForSummary = contentForSummary || rss.description
+
+      // Route URL4: Spotify — resolve RSS feed, or fall back to search
+      else if (isUrl && input.includes('spotify.com')) {
+        const feedUrl = await resolveSpotifyFeed(input)
+        if (feedUrl) {
+          const rss = await parseRssFeed(feedUrl)
+          episodeData = rss
+          if (rss.transcriptUrl) {
+            const t = await fetchTranscript(rss.transcriptUrl)
+            if (t) { contentForSummary = t; contentSource = 'transcript' }
+          }
+          if (!contentForSummary && rss.audioUrl && isDirectAudioUrl(rss.audioUrl)) {
+            try {
+              contentForSummary = await transcribeAudio(rss.audioUrl)
+              contentSource = 'transcript'
+            } catch { /* fall through */ }
+          }
+          contentForSummary = contentForSummary || rss.description
+        }
+        // If RSS resolution failed, fall back to search
+        if (!contentForSummary) {
+          if (!process.env.LISTEN_NOTES_API_KEY) {
+            return NextResponse.json({ error: 'Could not resolve RSS feed for this Spotify URL and LISTEN_NOTES_API_KEY is not configured.' }, { status: 422 })
+          }
+          episodeData = await searchEpisode(input)
+          contentForSummary = episodeData.description
+        }
+      }
+
+      // Route URL5: Unknown URL format in URL mode — error
+      else {
+        return NextResponse.json({ error: 'Unrecognized URL. Paste an RSS feed, Apple Podcasts, Spotify, or direct audio URL.' }, { status: 400 })
+      }
     }
 
-    // ── Route 3: Apple Podcasts URL ────────────────────────────────────────
-    else if (isUrl && input.includes('podcasts.apple.com')) {
-      const ogTitle = await scrapeOgTitle(input)
-      const searchQuery = ogTitle || new URL(input).pathname.split('/').filter(Boolean).slice(-2).join(' ').replace(/-/g, ' ')
-      episodeData = await searchEpisode(searchQuery)
-      contentForSummary = episodeData.description
-    }
-
-    // ── Route 4: Spotify URL ───────────────────────────────────────────────
-    else if (isUrl && input.includes('spotify.com')) {
-      const ogTitle = await scrapeOgTitle(input)
-      episodeData = await searchEpisode(ogTitle || 'podcast episode')
-      contentForSummary = episodeData.description
-    }
-
-    // ── Route 5: Search query or anything else ─────────────────────────────
+    // ── Search mode (default) ───────────────────────────────────────────────
     else {
       if (!process.env.LISTEN_NOTES_API_KEY) {
         return NextResponse.json({ error: 'LISTEN_NOTES_API_KEY not configured in Vercel' }, { status: 503 })
