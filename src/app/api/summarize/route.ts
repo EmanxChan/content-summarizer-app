@@ -2,10 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export const dynamic = 'force-dynamic'
 import OpenAI from 'openai'
-import { execSync } from 'child_process'
-import fs from 'fs'
-import path from 'path'
-import os from 'os'
 
 function getGroq() {
   return new OpenAI({
@@ -16,91 +12,52 @@ function getGroq() {
 
 const MODEL = () => process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
 
-interface YouTubeResult {
-  title: string
-  transcript: string
-  available: true
-}
-
-interface YouTubeUnavailable {
-  available: false
-  reason: string
-}
-
-type YouTubeFallbackResult = YouTubeResult | YouTubeUnavailable
-
-async function getYouTubeTranscript(url: string): Promise<YouTubeFallbackResult> {
+async function getYouTubeTranscript(url: string): Promise<{ title: string; transcript: string }> {
   const match = url.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/)
-  if (!match) return { available: false, reason: 'Invalid YouTube URL' }
+  if (!match) throw new Error('Invalid YouTube URL')
   const videoId = match[1]
 
-  // Fetch title from YouTube page
-  const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
-    headers: { 'User-Agent': 'Mozilla/5.0' },
-  })
-  const html = await pageRes.text()
-  const titleMatch = html.match(/<title>(.+?)<\/title>/)
-  const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
-
-  // ── Attempt 1: youtube-transcript package ───────────────────────────────
+  // ── Attempt 1: youtube-transcript package ─────────────────────────────
   try {
     const { YoutubeTranscript } = await import('youtube-transcript')
     const segments = await YoutubeTranscript.fetchTranscript(videoId)
     if (segments && segments.length > 0) {
       const transcript = segments.map(s => s.text).join(' ')
-      return { title, transcript, available: true }
+      // Also fetch title from page
+      const pageRes = await fetch(`https://www.youtube.com/watch?v=${videoId}`, {
+        headers: { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_4) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/85.0.4183.83 Safari/537.36,gzip(gfe)' },
+      })
+      const html = await pageRes.text()
+      const titleMatch = html.match(/<title>(.+?)<\/title>/)
+      const title = titleMatch ? titleMatch[1].replace(' - YouTube', '').trim() : 'YouTube Video'
+      return { title, transcript }
     }
-  } catch {
-    // Fall through to attempt 2
+  } catch (e) {
+    console.log('youtube-transcript failed:', (e as Error).message)
+    // Fall through to next attempt
   }
 
-  // ── Attempt 2: yt-dlp --write-subs --skip-download ──────────────────────
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'yt-subs-'))
-  try {
-    execSync(
-      `yt-dlp --write-subs --write-auto-subs --sub-langs en --skip-download --output "${tmpDir}/%(id)s" "${videoId}"`,
-      { timeout: 30000, stdio: 'pipe' }
-    )
-    const files = fs.readdirSync(tmpDir)
-    const vttFile = files.find(f => f.endsWith('.vtt') || f.endsWith('.srt'))
-    if (vttFile) {
-      const raw = fs.readFileSync(path.join(tmpDir, vttFile), 'utf-8')
-      const transcript = raw
-        .replace(/WEBVTT[\s\S]*?\n\n/, '')
-        .replace(/\d+\n\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}\n/g, '')
-        .replace(/<\/?[^>]+>/g, '')
-        .replace(/\n{3,}/g, '\n\n')
-        .trim()
-      if (transcript.length > 50) {
-        return { title, transcript, available: true }
-      }
-    }
-  } catch {
-    // Fall through to attempt 3
-  } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true })
-  }
-
-  // ── Attempt 3: YouTube oEmbed API for video description ─────────────────
+  // ── Attempt 2: oEmbed fallback (description only) ────────────────────
   try {
     const oembedRes = await fetch(
       `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`
     )
     if (oembedRes.ok) {
       const oembed = await oembedRes.json() as { title?: string; description?: string }
-      const description = oembed.description || ''
-      if (description.length > 50) {
-        return { title: oembed.title || title, transcript: description, available: true }
+      const title = oembed.title || 'YouTube Video'
+      // oEmbed only gives title, no description - but at least we got the title
+      if (oembed.title) {
+        return { 
+          title, 
+          transcript: `Video titled "${title}". No transcript available - the creator has not enabled captions/subtitles for this video.` 
+        }
       }
     }
-  } catch {
-    // Fall through — all attempts exhausted
+  } catch (e) {
+    console.log('oEmbed fallback failed:', (e as Error).message)
   }
 
-  return {
-    available: false,
-    reason: 'No captions available for this video. The creator has not enabled transcripts and no subtitles were found. Try a different video.',
-  }
+  throw new Error('No transcript available for this video. The creator has not enabled captions/subtitles. Try a different video.')
 }
 
 async function summarizeText(
@@ -147,7 +104,6 @@ export async function POST(req: NextRequest) {
     let url = '', text = '', words = 300, instructions = ''
 
     if (contentType.includes('multipart/form-data')) {
-      // File upload — Phase 5
       return NextResponse.json({ error: 'File upload coming in Phase 5' }, { status: 501 })
     } else {
       const body = await req.json()
@@ -162,9 +118,6 @@ export async function POST(req: NextRequest) {
 
     if (url && (url.includes('youtube.com') || url.includes('youtu.be'))) {
       const ytResult = await getYouTubeTranscript(url)
-      if (!ytResult.available) {
-        return NextResponse.json({ error: ytResult.reason }, { status: 422 })
-      }
       title = ytResult.title
       transcript = ytResult.transcript
     } else if (url) {
