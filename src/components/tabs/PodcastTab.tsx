@@ -47,7 +47,7 @@ export default function PodcastTab() {
       const res = await fetch('/api/podcast', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: query.trim(), words, instructions }),
+        body: JSON.stringify({ query: query.trim(), mode, words, instructions }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to process podcast')
@@ -101,7 +101,7 @@ export default function PodcastTab() {
               ? 'e.g. "Huberman Lab sleep" or "All-In latest episode"'
               : 'Apple Podcasts, Spotify, RSS feed, or .mp3 URL'
           }
-          type={mode === 'url' ? 'url' : 'text'}
+          type="text"
         />
 
         <div className="flex items-center gap-3">
